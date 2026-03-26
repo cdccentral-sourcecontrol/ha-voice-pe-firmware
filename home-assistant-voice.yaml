@@ -81,6 +81,8 @@ esp32:
       CONFIG_MBEDTLS_SSL_PROTO_TLS1_3: "y"  # TLS1.3 support isn't enabled by default in IDF 5.1.5
 
 wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
   id: wifi_id
   fast_connect: ${hidden_ssid}
   on_connect:
@@ -1725,6 +1727,10 @@ micro_wake_word:
     - model: https://github.com/kahrendt/microWakeWord/releases/download/stop/stop.json
       id: stop
       internal: true
+    - model: models/hey_ara.json
+      id: hey_ara
+    - model: models/hey_bender.json
+      id: hey_bender
   vad:
   on_wake_word_detected:
     # If the wake word is detected when the device is muted (Possible with the software mute switch): Do nothing
