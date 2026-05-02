@@ -109,6 +109,15 @@ logger:
 
 api:
   id: api_id
+  services:
+    # Remote recording trigger — allows capturing microphone audio via the API
+    # without a physical button press. Used by record_room_audio.py for
+    # wake word training ambient noise collection.
+    - service: start_recording_direct_audio
+      then:
+        - micro_wake_word.stop:
+        - delay: 200ms
+        - voice_assistant.start:
   on_client_connected:
     - script.execute: control_leds
   on_client_disconnected:
