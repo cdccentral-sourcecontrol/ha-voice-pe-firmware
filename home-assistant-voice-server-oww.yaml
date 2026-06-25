@@ -976,6 +976,24 @@ power_supply:
   - id: led_power
     pin: GPIO45
 
+text_sensor:
+  # Exposed to HA for voice_pe_stuck_watchdog (not_ready/error = red LED on device).
+  - platform: template
+    name: "Voice Assistant Phase"
+    id: voice_assistant_phase_sensor
+    icon: mdi:microphone-message
+    lambda: |-
+      const int phase = id(voice_assistant_phase);
+      if (phase == 1) return std::string("idle");
+      if (phase == 2) return std::string("waiting_for_command");
+      if (phase == 3) return std::string("listening");
+      if (phase == 4) return std::string("thinking");
+      if (phase == 5) return std::string("replying");
+      if (phase == 10) return std::string("not_ready");
+      if (phase == 11) return std::string("error");
+      return std::string("unknown");
+    update_interval: 2s
+
 sensor:
   # The dial. Used to control volume and Hue of the LED ring.
   - platform: rotary_encoder
@@ -1715,35 +1733,9 @@ voice_assistant:
               id: play_sound
               priority: true
               sound_file: "error_cloud_expired"
-  on_wake_word_detected:
-    - if:
-        condition:
-          switch.is_off: master_mute_switch
-        then:
-          - if:
-              condition:
-                switch.is_on: timer_ringing
-              then:
-                - switch.turn_off: timer_ringing
-              else:
-                - if:
-                    condition:
-                      media_player.is_announcing:
-                        id: external_media_player
-                    then:
-                      - media_player.stop:
-                          announcement: true
-                          id: external_media_player
-                    else:
-                      - if:
-                          condition:
-                            switch.is_on: wake_sound
-                          then:
-                            - script.execute:
-                                id: play_sound
-                                priority: true
-                                sound_file:  wake_word_triggered_sound
-                            - delay: 300ms
+  # on_wake_word_detected removed (mWW deprecation 2026-06-06, server-OWW-only for the 4 Voice PEs via voice-pe-base).
+  # Server-side openWakeWord (limited to hey_bender) now drives detection via the continuous stream.
+  # The on_start / on_listening / LED phases / ducking / timer handlers remain for post-detection behavior.
   # When the voice assistant starts: Play a wake up sound, duck audio.
   on_start:
     - mixer_speaker.apply_ducking:
