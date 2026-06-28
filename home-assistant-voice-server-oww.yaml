@@ -1699,7 +1699,9 @@ voice_assistant:
     - microphone: i2s_mics
       channels: 1
   media_player: external_media_player
-  use_wake_word: true
+  # Server OWW only (hey_bender via Jarvis_kit). On-device mWW caused duplicate_wake_up_detected
+  # and first-utterance stt-no-text-recognized when user spoke right after wake LED.
+  use_wake_word: false
   noise_suppression_level: 2
   auto_gain: 31dBFS
   volume_multiplier: 1
