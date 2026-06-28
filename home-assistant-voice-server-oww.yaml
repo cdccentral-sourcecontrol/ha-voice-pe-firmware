@@ -114,14 +114,6 @@ api:
   on_client_disconnected:
     - script.execute: control_leds
   encryption:   # Uses key set by Home Assistant
-  # Stream gating: server OWW must not receive audio until HA explicitly enables voice.
-  services:
-    - service: start_voice_stream
-      then:
-        - voice_assistant.start_continuous:
-    - service: stop_voice_stream
-      then:
-        - voice_assistant.stop:
 
 ota:
   - platform: esphome
@@ -188,11 +180,6 @@ globals:
     initial_value: 'false'
   # Global variable tracking if the jack has been unplugged touched.
   - id: jack_unplugged_recently
-    type: bool
-    restore_value: no
-    initial_value: 'false'
-  # Mic ducked for TTS so speaker audio does not re-trigger server OWW on the continuous stream.
-  - id: pipeline_mic_muted_for_tts
     type: bool
     restore_value: no
     initial_value: 'false'
@@ -1712,9 +1699,7 @@ voice_assistant:
     - microphone: i2s_mics
       channels: 1
   media_player: external_media_player
-  # Server OWW only (hey_bender via Jarvis_kit). On-device mWW caused duplicate_wake_up_detected
-  # and first-utterance stt-no-text-recognized when user spoke right after wake LED.
-  use_wake_word: false
+  use_wake_word: true
   noise_suppression_level: 2
   auto_gain: 31dBFS
   volume_multiplier: 1
@@ -1722,7 +1707,7 @@ voice_assistant:
     - lambda: id(init_in_progress) = false;
     - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
     - script.execute: control_leds
-    # start_continuous only via api.start_voice_stream (voice_pe_enable_voice script).
+    - voice_assistant.start_continuous:
   on_client_disconnected:
     - voice_assistant.stop:
     - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
@@ -1757,10 +1742,8 @@ voice_assistant:
         id: media_mixing_input
         decibel_reduction: 20  # Number of dB quieter; higher implies more quiet, 0 implies full volume
         duration: 0.0s         # The duration of the transition (default is no transition)
-  # Server OWW: on_listening fires before STT VAD is ready — keep LED off until VAD opens.
-  # Do NOT play wake_sound here: speaker audio feeds the continuous mic stream -> OWW re-triggers.
   on_listening:
-    - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+    - lambda: id(voice_assistant_phase) = ${voice_assist_waiting_for_command_phase_id};
     - script.execute: control_leds
   on_stt_vad_start:
     - lambda: id(voice_assistant_phase) = ${voice_assist_listening_for_command_phase_id};
@@ -1774,25 +1757,9 @@ voice_assistant:
           # A nonempty x variable means a streaming TTS url was sent to the media player
           lambda: 'return !x.empty();'
         then:
-          - if:
-              condition:
-                and:
-                  - binary_sensor.is_off: hardware_mute_switch
-                  - lambda: 'return !id(pipeline_mic_muted_for_tts);'
-              then:
-                - microphone.mute:
-                - lambda: id(pipeline_mic_muted_for_tts) = true;
           - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
           - script.execute: control_leds
   on_tts_start:
-    - if:
-        condition:
-          and:
-            - binary_sensor.is_off: hardware_mute_switch
-            - lambda: 'return !id(pipeline_mic_muted_for_tts);'
-        then:
-          - microphone.mute:
-          - lambda: id(pipeline_mic_muted_for_tts) = true;
     - if:
         condition:
           # The intent_progress trigger didn't start the TTS Reponse
@@ -1802,16 +1769,6 @@ voice_assistant:
           - script.execute: control_leds
   # When the voice assistant ends ...
   on_end:
-    - if:
-        condition:
-          lambda: 'return id(pipeline_mic_muted_for_tts);'
-        then:
-          - if:
-              condition:
-                binary_sensor.is_off: hardware_mute_switch
-              then:
-                - microphone.unmute:
-          - lambda: id(pipeline_mic_muted_for_tts) = false;
     # Stop ducking audio.
     - mixer_speaker.apply_ducking:
         id: media_mixing_input
