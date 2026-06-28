@@ -196,6 +196,11 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+  # Mic muted during TTS so speaker audio does not re-trigger server OWW on the continuous stream.
+  - id: pipeline_mic_muted_for_tts
+    type: bool
+    restore_value: no
+    initial_value: 'false'
 
 switch:
   # This is the master mute switch. It is exposed to Home Assistant. The user can only turn it on and off if the hardware switch is off. (The hardware switch overrides the software one)
@@ -1757,9 +1762,25 @@ voice_assistant:
           # A nonempty x variable means a streaming TTS url was sent to the media player
           lambda: 'return !x.empty();'
         then:
+          - if:
+              condition:
+                and:
+                  - binary_sensor.is_off: hardware_mute_switch
+                  - lambda: 'return !id(pipeline_mic_muted_for_tts);'
+              then:
+                - microphone.mute:
+                - lambda: id(pipeline_mic_muted_for_tts) = true;
           - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
           - script.execute: control_leds
   on_tts_start:
+    - if:
+        condition:
+          and:
+            - binary_sensor.is_off: hardware_mute_switch
+            - lambda: 'return !id(pipeline_mic_muted_for_tts);'
+        then:
+          - microphone.mute:
+          - lambda: id(pipeline_mic_muted_for_tts) = true;
     - if:
         condition:
           # The intent_progress trigger didn't start the TTS Reponse
@@ -1769,6 +1790,16 @@ voice_assistant:
           - script.execute: control_leds
   # When the voice assistant ends ...
   on_end:
+    - if:
+        condition:
+          lambda: 'return id(pipeline_mic_muted_for_tts);'
+        then:
+          - if:
+              condition:
+                binary_sensor.is_off: hardware_mute_switch
+              then:
+                - microphone.unmute:
+          - lambda: id(pipeline_mic_muted_for_tts) = false;
     # Stop ducking audio.
     - mixer_speaker.apply_ducking:
         id: media_mixing_input
